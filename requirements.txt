@@ -1,0 +1,13 @@
+# API dependencies
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+httpx>=0.25.0
+lmdb>=1.4.0
+
+# sat_revsynth dependencies (install via pip install -e ../sat_revsynth)
+# Or install these directly:
+qiskit>=1.0.0
+numpy>=1.21.0
+python-sat>=0.1.7
+networkx>=2.6.0
