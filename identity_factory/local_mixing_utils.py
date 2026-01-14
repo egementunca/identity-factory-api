@@ -190,7 +190,7 @@ def canonicalize_simple(
 
 
 # Path to local_mixing Rust binary
-LOCAL_MIXING_DIR = Path(__file__).parent.parent.parent.parent / "local_mixing"
+LOCAL_MIXING_DIR = Path(__file__).parent.parent.parent / "local_mixing"
 LOCAL_MIXING_BIN = LOCAL_MIXING_DIR / "target" / "release" / "local_mixing_bin"
 
 

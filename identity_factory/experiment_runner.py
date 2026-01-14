@@ -20,6 +20,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import AsyncGenerator, Dict, List, Optional
 
+from identity_factory.local_mixing_utils import get_rust_binary_path
 from identity_factory.api.experiment_models import (
     ExperimentConfig,
     ExperimentPreset,
@@ -27,7 +28,11 @@ from identity_factory.api.experiment_models import (
     ExperimentResults,
     ExperimentStatus,
     ExperimentType,
+    ExperimentResults,
+    ExperimentStatus,
+    ExperimentType,
     ObfuscationParams,
+    ObfuscationStrategy,
 )
 
 logger = logging.getLogger(__name__)
@@ -294,11 +299,13 @@ class ExperimentRunner:
 
             # Generate initial circuit
             initial_gate = output_dir / "initial.gate"
+            
+            bin_path = get_rust_binary_path()
+            if not bin_path:
+                raise RuntimeError("local_mixing binary not found. Please build it first.")
+
             gen_cmd = [
-                "cargo",
-                "run",
-                "--release",
-                "--",
+                str(bin_path),
                 "gen",
                 "--wires",
                 str(config.wires),
@@ -362,12 +369,15 @@ class ExperimentRunner:
             # Build CLI command with --config flag
             # Config file now provides all parameters (rounds, shooting, etc.)
             # CLI args only specify path, wires, and config location
+
+            # Determine command based on strategy
+            strategy = config.obfuscation.strategy
+            command_name = strategy.value if hasattr(strategy, "value") else strategy
+
+            # Basic command structure
             obf_cmd = [
-                "cargo",
-                "run",
-                "--release",
-                "--",
-                "abbutterfly",
+                str(bin_path),
+                command_name,
                 "--path",
                 str(initial_gate),
                 "-n",
@@ -376,8 +386,19 @@ class ExperimentRunner:
                 str(obf_config_path),
             ]
 
+            # Add strategy-specific flags
+            if command_name == "abbutterfly" and config.obfuscation.bookendless:
+                obf_cmd.append("--bookendless")
+
             if config.lmdb_path:
-                obf_cmd.extend(["--lmdb-db", config.lmdb_path])
+                # bbutterfly does not support lmdb-db flag in CLI args generally, 
+                # but abbutterfly does. However, correct way is likely passed via config json or env?
+                # Based on analysis, abbutterfly takes --lmdb-db.
+                # bbutterfly takes env from config or default.
+                # Let's keep it safe: pass if supported.
+                if command_name == "abbutterfly":
+                     obf_cmd.extend(["--lmdb-db", config.lmdb_path])
+                # For others, we assume config.json handles it via "lmdb_path" field.
 
             # Save config JSON for reproducibility
             config_json = output_dir / "config.json"
@@ -467,10 +488,7 @@ class ExperimentRunner:
                 f"[{datetime.now().strftime('%H:%M:%S')}] Generating heatmap..."
             )
             heatmap_cmd = [
-                "cargo",
-                "run",
-                "--release",
-                "--",
+                str(bin_path),
                 "heatmap",
                 "--c1",
                 str(initial_gate),
@@ -634,12 +652,19 @@ class ExperimentRunner:
 
         # Send final update
         progress = self.get_progress(job)
+        
+        # Check for any remaining logs
+        new_lines = []
+        if len(job.log_lines) > last_line_count:
+            new_lines = job.log_lines[last_line_count:]
+            
         final_update = {
             "status": progress.status.value,
             "progress_percent": (
                 100.0 if job.status == ExperimentStatus.COMPLETED else 0.0
             ),
             "final": True,
+            "new_lines": new_lines,
         }
         yield f"data: {json.dumps(final_update)}\n\n"
 

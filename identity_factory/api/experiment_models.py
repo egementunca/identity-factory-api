@@ -32,12 +32,28 @@ class ExperimentStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class ObfuscationStrategy(str, Enum):
+    """Obfuscation strategy types."""
+
+    ABBUTTERFLY = "abbutterfly"
+    BBUTTERFLY = "bbutterfly"
+    BUTTERFLY = "butterfly"
+
+
 class ObfuscationParams(BaseModel):
     """
     Obfuscation parameters matching local_mixing's ObfuscationConfig.
 
     See: local_mixing/src/config.rs
     """
+
+    # --- Strategy ---
+    strategy: ObfuscationStrategy = Field(
+        ObfuscationStrategy.ABBUTTERFLY, description="Obfuscation strategy to use"
+    )
+    bookendless: bool = Field(
+        False, description="Enable bookendless mode (abbutterfly only)"
+    )
 
     # --- Structural Parameters (Mixing) ---
     structure_block_size_min: int = Field(
