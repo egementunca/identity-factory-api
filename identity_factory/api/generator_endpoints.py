@@ -1,12 +1,9 @@
-"""
-Generator API endpoints.
-Provides REST API for managing and running circuit generators.
-"""
-
 import asyncio
 import logging
+import multiprocessing
 import threading
 import uuid
+from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -28,6 +25,17 @@ _db_path.parent.mkdir(parents=True, exist_ok=True)
 # In-memory storage for run tracking
 _active_runs: Dict[str, Dict[str, Any]] = {}
 _run_lock = threading.Lock()
+
+# Process pool for generation (shared across requests)
+_executor: Optional[ProcessPoolExecutor] = None
+
+
+def get_executor() -> ProcessPoolExecutor:
+    """Get or create the process pool executor."""
+    global _executor
+    if _executor is None:
+        _executor = ProcessPoolExecutor(max_workers=2)
+    return _executor
 
 
 # === Request/Response Models ===
@@ -92,12 +100,13 @@ class GenerateResultResponse(BaseModel):
     gate_set: str = "mcx"
     total_seconds: float = 0.0
     error: Optional[str] = None
+    circuit_ids: List[int] = []
 
 
 # === Background task for generation ===
 
 
-def run_generation_task(
+async def run_generation_async(
     run_id: str,
     generator_name: str,
     width: int,
@@ -106,49 +115,58 @@ def run_generation_task(
     max_circuits: Optional[int],
     config: Optional[Dict[str, Any]],
 ):
-    """Background task to run generation."""
-    registry = get_registry()
-    generator = registry.get_generator(generator_name)
-
-    if not generator:
-        with _run_lock:
-            _active_runs[run_id]["status"] = "failed"
-            _active_runs[run_id]["error"] = f"Generator '{generator_name}' not found"
-        return
-
-    def progress_callback(progress: GenerationProgress):
-        with _run_lock:
-            if run_id in _active_runs:
-                _active_runs[run_id].update(
-                    {
-                        "status": progress.status.value,
-                        "circuits_found": progress.circuits_found,
-                        "circuits_stored": progress.circuits_stored,
-                        "duplicates_skipped": progress.duplicates_skipped,
-                        "current_gate_count": progress.current_gate_count,
-                        "current_width": progress.current_width,
-                        "elapsed_seconds": progress.elapsed_seconds,
-                        "estimated_remaining_seconds": progress.estimated_remaining_seconds,
-                        "circuits_per_second": progress.circuits_per_second,
-                        "current_status": progress.current_status,
-                        "error": progress.error,
-                    }
-                )
-
+    """
+    Async task to manage generation in a subprocess.
+    
+    This function:
+    1. Spawns the generation in a ProcessPoolExecutor
+    2. Monitors a queue for progress updates
+    3. Stores results when complete
+    """
+    from .generation_worker import generate_in_process
+    
+    # Create a manager and queue for progress updates
+    manager = multiprocessing.Manager()
+    progress_queue = manager.Queue()
+    
+    loop = asyncio.get_running_loop()
+    executor = get_executor()
+    
     try:
-        result = generator.generate(
-            width=width,
-            gate_count=gate_count,
-            gate_set=gate_set,
-            max_circuits=max_circuits,
-            config=config,
-            progress_callback=progress_callback,
+        # Run generation in process pool
+        future = loop.run_in_executor(
+            executor,
+            generate_in_process,
+            generator_name,
+            width,
+            gate_count,
+            gate_set,
+            max_circuits,
+            config,
+            progress_queue,
         )
-
+        
+        # Monitor progress while waiting for completion
+        while not future.done():
+            # Drain the progress queue
+            while not progress_queue.empty():
+                try:
+                    progress_data = progress_queue.get_nowait()
+                    with _run_lock:
+                        if run_id in _active_runs:
+                            _active_runs[run_id].update(progress_data)
+                except Exception:
+                    break
+            
+            await asyncio.sleep(0.1)
+        
+        # Get the result
+        result = await future
+        
         # Store circuits in database if any were generated
         stored_count = 0
         stored_ids = []
-        if result.success and result.circuits:
+        if result.get("success") and result.get("circuits"):
             try:
                 db = CircuitDatabase(str(_db_path))
 
@@ -166,7 +184,7 @@ def run_generation_task(
                     dim_group = db.get_dim_group(width, gate_count)
 
                 # Store each circuit
-                for circuit_data in result.circuits:
+                for circuit_data in result["circuits"]:
                     circuit_width = circuit_data.get("width", width)
                     circuit_gates = circuit_data.get("gates", [])
                     circuit_perm = circuit_data.get("permutation", [])
@@ -208,15 +226,15 @@ def run_generation_task(
             if run_id in _active_runs:
                 _active_runs[run_id].update(
                     {
-                        "status": "completed" if result.success else "failed",
+                        "status": "completed" if result.get("success") else "failed",
                         "circuits_stored": stored_count,
                         "result": {
-                            "success": result.success,
-                            "total_circuits": result.total_circuits,
+                            "success": result.get("success", False),
+                            "total_circuits": result.get("total_circuits", 0),
                             "new_circuits": stored_count,
-                            "duplicates": result.duplicates,
-                            "total_seconds": result.total_seconds,
-                            "error": result.error,
+                            "duplicates": result.get("duplicates", 0),
+                            "total_seconds": result.get("total_seconds", 0.0),
+                            "error": result.get("error"),
                             "circuit_ids": stored_ids,
                         },
                         "completed_at": datetime.now().isoformat(),
@@ -234,6 +252,12 @@ def run_generation_task(
                         "completed_at": datetime.now().isoformat(),
                     }
                 )
+    finally:
+        # Clean up the manager
+        try:
+            manager.shutdown()
+        except Exception:
+            pass
 
 
 # === Endpoints ===
@@ -334,24 +358,19 @@ async def start_generation(request: GenerateRequest):
             "result": None,
         }
 
-    # Start in a separate thread for reliable execution
-    import threading
-
-    thread = threading.Thread(
-        target=run_generation_task,
-        kwargs={
-            "run_id": run_id,
-            "generator_name": request.generator_name,
-            "width": request.width,
-            "gate_count": request.gate_count,
-            "gate_set": request.gate_set,
-            "max_circuits": request.max_circuits,
-            "config": request.config,
-        },
-        daemon=True,
+    # Start generation as an async task (non-blocking)
+    asyncio.create_task(
+        run_generation_async(
+            run_id=run_id,
+            generator_name=request.generator_name,
+            width=request.width,
+            gate_count=request.gate_count,
+            gate_set=request.gate_set,
+            max_circuits=request.max_circuits,
+            config=request.config,
+        )
     )
-    thread.start()
-    logger.info(f"Started generation thread for run {run_id}")
+    logger.info(f"Started async generation for run {run_id}")
 
     return RunStatusResponse(
         run_id=run_id,
@@ -454,6 +473,7 @@ async def get_run_result(run_id: str):
         gate_count=run.get("current_gate_count"),
         total_seconds=result.get("total_seconds", 0.0),
         error=result.get("error"),
+        circuit_ids=result.get("circuit_ids", []),
     )
 
 

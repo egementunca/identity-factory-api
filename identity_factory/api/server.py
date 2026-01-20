@@ -219,6 +219,13 @@ def create_app(
 
     app.include_router(eca57_lmdb_router, prefix="/api/v1", tags=["eca57-lmdb"])
 
+    # Include identity browser endpoints (saved identity circuits from local_mixing)
+    from .identity_browser_endpoints import router as identity_browser_router
+
+    app.include_router(
+        identity_browser_router, prefix="/api/v1/local-mixing/identities", tags=["identity-browser"]
+    )
+
     # Include Local Mixing endpoints (canonicalization, heatmap, inflation preview)
     from .local_mixing_endpoints import router as local_mixing_router
 
@@ -230,6 +237,11 @@ def create_app(
     from .cluster_endpoints import router as cluster_router
 
     app.include_router(cluster_router, prefix="/api/v1", tags=["cluster-database"])
+    
+    # Include Permutation Database endpoints (Rust LMDB Permutation Tables)
+    from .perm_db_endpoints import router as perm_db_router
+
+    app.include_router(perm_db_router, prefix="/api/v1", tags=["perm-database"])
 
     # Include Experiment endpoints (run local_mixing experiments with progress streaming)
     from .experiment_endpoints import router as experiment_router

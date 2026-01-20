@@ -359,6 +359,8 @@ class ExperimentRunner:
                 "chunk_split_base": obf.chunk_split_base,
                 "reducer_active_wire_limit": 6,
                 "reducer_window_sizes": [4, 6, 8, 10, 12, 16],
+                "pair_replacement_mode": obf.pair_replacement_mode,
+                "equal_replacement_mode": True,
                 "lmdb_path": config.lmdb_path or "db",
             }
 
@@ -384,6 +386,8 @@ class ExperimentRunner:
                 str(config.wires),
                 "--config",
                 str(obf_config_path),
+                "--rounds",
+                str(config.obfuscation.rounds),
             ]
 
             # Add strategy-specific flags
@@ -515,6 +519,46 @@ class ExperimentRunner:
                     f.write(heatmap_result.stdout)
                 job.log_lines.append("  Heatmap generated")
 
+            # Generate alignment (DTW)
+            if config.wires <= 64:
+                job.log_lines.append(
+                    f"[{datetime.now().strftime('%H:%M:%S')}] Generating alignment..."
+                )
+                align_cmd = [
+                    str(bin_path),
+                    "align",
+                    "--c1",
+                    str(initial_gate),
+                    "--c2",
+                    str(obf_gate),
+                    "--num_wires",
+                    str(config.wires),
+                    "--inputs",
+                    "100",
+                ]
+                align_result = await asyncio.to_thread(
+                    subprocess.run,
+                    align_cmd,
+                    cwd=str(LOCAL_MIXING_DIR),
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+                if align_result.returncode == 0:
+                    alignment_json = output_dir / "alignment.json"
+                    with open(alignment_json, "w") as f:
+                        f.write(align_result.stdout)
+                    job.log_lines.append("  Alignment generated")
+                else:
+                    stderr = align_result.stderr.strip()
+                    job.log_lines.append(
+                        f"  Alignment failed{': ' + stderr if stderr else ''}"
+                    )
+            else:
+                job.log_lines.append(
+                    "  Alignment skipped (alignment supports <= 64 wires)"
+                )
+
             # Save results
             results = {
                 "job_id": job.job_id,
@@ -584,6 +628,9 @@ class ExperimentRunner:
         heatmap_data = None
         heatmap_x = None
         heatmap_y = None
+        alignment_c_star = None
+        alignment_path = None
+        alignment_matrix = None
 
         if job.output_dir:
             heatmap_json = job.output_dir / "heatmap.json"
@@ -594,6 +641,16 @@ class ExperimentRunner:
                         heatmap_data = data.get("heatmap_data")
                         heatmap_x = data.get("x_size")
                         heatmap_y = data.get("y_size")
+                except:
+                    pass
+            alignment_json = job.output_dir / "alignment.json"
+            if alignment_json.exists():
+                try:
+                    with open(alignment_json) as f:
+                        data = json.load(f)
+                        alignment_c_star = data.get("c_star")
+                        alignment_path = data.get("path")
+                        alignment_matrix = data.get("d_matrix")
                 except:
                     pass
 
@@ -612,6 +669,9 @@ class ExperimentRunner:
             heatmap_data=heatmap_data,
             heatmap_x_size=heatmap_x,
             heatmap_y_size=heatmap_y,
+            alignment_c_star=alignment_c_star,
+            alignment_path=alignment_path,
+            alignment_matrix=alignment_matrix,
             output_circuit_path=(
                 str(job.output_dir / "obfuscated.gate") if job.output_dir else None
             ),

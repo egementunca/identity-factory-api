@@ -54,6 +54,13 @@ class GeneratorRegistry:
         except ImportError as e:
             logger.warning(f"Could not load Go Enumerator generator: {e}")
 
+        try:
+            from .skeleton_generator import SkeletonGenerator
+
+            self.register(SkeletonGenerator)
+        except ImportError as e:
+            logger.warning(f"Could not load Skeleton generator: {e}")
+
     def register(self, generator_class: Type[CircuitGenerator]):
         """Register a generator class."""
         instance = generator_class()

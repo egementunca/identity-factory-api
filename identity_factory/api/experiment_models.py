@@ -102,6 +102,10 @@ class ObfuscationParams(BaseModel):
         False,
         description="Skip compression entirely - circuit only grows larger (inflation only mode)",
     )
+    pair_replacement_mode: bool = Field(
+        True,
+        description="Enable pair replacement - replaces pairs of gates with single equivalent templates from LMDB (reduces gate count)",
+    )
 
     # --- Compression/Optimization ---
     compression_window_size: int = Field(
@@ -222,12 +226,38 @@ class ExperimentResults(BaseModel):
     heatmap_x_size: Optional[int] = None
     heatmap_y_size: Optional[int] = None
 
+    # --- Alignment (if generated) ---
+    alignment_c_star: Optional[float] = None
+    alignment_path: Optional[List[List[int]]] = None
+    alignment_matrix: Optional[Dict[str, Any]] = None
+
     # --- Output files ---
     output_circuit_path: Optional[str] = None
     results_json_path: Optional[str] = None
 
     # --- Logs ---
     log_output: Optional[str] = None
+
+
+class ExperimentHistoryItem(BaseModel):
+    """Compact summary for experiment history lists."""
+
+    job_id: str
+    name: str
+    status: ExperimentStatus
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    elapsed_seconds: Optional[float] = None
+    initial_gates: Optional[int] = None
+    final_gates: Optional[int] = None
+    expansion_factor: Optional[float] = None
+    config: Optional[ExperimentConfig] = None
+
+
+class ExperimentHistoryResponse(BaseModel):
+    """Response containing experiment history items."""
+
+    history: List[ExperimentHistoryItem]
 
 
 class PresetsResponse(BaseModel):

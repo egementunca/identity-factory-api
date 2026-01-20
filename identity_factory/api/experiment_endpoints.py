@@ -8,7 +8,10 @@ Provides endpoints to:
 - Get experiment results
 """
 
+import json
 import logging
+from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
@@ -17,6 +20,8 @@ from fastapi.responses import StreamingResponse
 from identity_factory.api.experiment_models import (
     ConfigSchemaResponse,
     ExperimentConfig,
+    ExperimentHistoryItem,
+    ExperimentHistoryResponse,
     ExperimentProgress,
     ExperimentResults,
     ExperimentStatus,
@@ -25,11 +30,89 @@ from identity_factory.api.experiment_models import (
     StartExperimentRequest,
     StartExperimentResponse,
 )
-from identity_factory.experiment_runner import experiment_runner
+from identity_factory.experiment_runner import EXPERIMENTS_DIR, experiment_runner
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _history_item_from_job(job) -> ExperimentHistoryItem:
+    results = (
+        experiment_runner.get_results(job)
+        if job.status in (ExperimentStatus.COMPLETED, ExperimentStatus.FAILED)
+        else None
+    )
+    initial_gates = results.initial_gates if results else job.initial_gates or None
+    final_gates = results.final_gates if results else job.final_gates or None
+    expansion_factor = results.expansion_factor if results else None
+    elapsed_seconds = (
+        results.elapsed_seconds
+        if results
+        else (datetime.now() - job.started_at).total_seconds()
+    )
+
+    return ExperimentHistoryItem(
+        job_id=job.job_id,
+        name=job.config.name,
+        status=job.status,
+        started_at=job.started_at,
+        completed_at=job.completed_at,
+        elapsed_seconds=elapsed_seconds,
+        initial_gates=initial_gates or None,
+        final_gates=final_gates or None,
+        expansion_factor=expansion_factor,
+        config=job.config,
+    )
+
+
+def _history_item_from_results_file(path: Path) -> Optional[ExperimentHistoryItem]:
+    try:
+        with open(path, "r") as f:
+            data = json.load(f)
+    except Exception:
+        return None
+
+    if not isinstance(data, dict):
+        return None
+
+    job_id = data.get("job_id")
+    if not job_id:
+        return None
+
+    config_data = data.get("config")
+    config = None
+    if config_data:
+        try:
+            config = ExperimentConfig.model_validate(config_data)
+        except Exception:
+            config = None
+
+    name = config.name if config else data.get("name") or path.parent.name
+    completed_at = datetime.fromtimestamp(path.stat().st_mtime)
+
+    return ExperimentHistoryItem(
+        job_id=job_id,
+        name=name,
+        status=ExperimentStatus.COMPLETED,
+        started_at=None,
+        completed_at=completed_at,
+        elapsed_seconds=data.get("elapsed_seconds"),
+        initial_gates=data.get("initial_gates"),
+        final_gates=data.get("final_gates"),
+        expansion_factor=data.get("expansion_factor"),
+        config=config,
+    )
+
+
+def _history_item_from_disk(job_id: str) -> Optional[ExperimentHistoryItem]:
+    if not EXPERIMENTS_DIR.exists():
+        return None
+    for results_path in EXPERIMENTS_DIR.rglob("results.json"):
+        item = _history_item_from_results_file(results_path)
+        if item and item.job_id == job_id:
+            return item
+    return None
 
 
 @router.get("/presets", response_model=PresetsResponse)
@@ -79,6 +162,50 @@ async def get_config_schema():
         schema=schema,
         parameter_descriptions=descriptions,
     )
+
+
+@router.get("/history", response_model=ExperimentHistoryResponse)
+async def get_experiment_history(limit: int = 20):
+    """
+    Get list of recent experiments (in-memory + disk).
+    """
+    items = []
+    job_ids = set()
+
+    for job in experiment_runner.jobs.values():
+        item = _history_item_from_job(job)
+        items.append(item)
+        job_ids.add(item.job_id)
+
+    if EXPERIMENTS_DIR.exists():
+        for results_path in EXPERIMENTS_DIR.rglob("results.json"):
+            item = _history_item_from_results_file(results_path)
+            if item and item.job_id not in job_ids:
+                items.append(item)
+                job_ids.add(item.job_id)
+
+    items.sort(
+        key=lambda item: item.completed_at or item.started_at or datetime.min,
+        reverse=True,
+    )
+
+    return ExperimentHistoryResponse(history=items[:limit])
+
+
+@router.get("/{job_id}/summary", response_model=ExperimentHistoryItem)
+async def get_experiment_summary(job_id: str):
+    """
+    Get a compact summary for a specific experiment.
+    """
+    job = experiment_runner.get_job(job_id)
+    if job:
+        return _history_item_from_job(job)
+
+    item = _history_item_from_disk(job_id)
+    if item:
+        return item
+
+    raise HTTPException(status_code=404, detail=f"Experiment {job_id} not found")
 
 
 @router.post("/start", response_model=StartExperimentResponse)
