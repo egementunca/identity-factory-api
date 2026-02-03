@@ -105,6 +105,25 @@ def _history_item_from_results_file(path: Path) -> Optional[ExperimentHistoryIte
     )
 
 
+def _results_from_disk(job_id: str) -> Optional[ExperimentResults]:
+    """Load full experiment results from disk."""
+    if not EXPERIMENTS_DIR.exists():
+        return None
+        
+    # Search for matching results.json
+    for results_path in EXPERIMENTS_DIR.rglob("results.json"):
+        try:
+            with open(results_path, "r") as f:
+                data = json.load(f)
+            
+            if data.get("job_id") == job_id:
+                return ExperimentResults.model_validate(data)
+        except Exception:
+            continue
+            
+    return None
+
+
 def _history_item_from_disk(job_id: str) -> Optional[ExperimentHistoryItem]:
     if not EXPERIMENTS_DIR.exists():
         return None
@@ -301,6 +320,11 @@ async def get_experiment_results(job_id: str):
     """
     job = experiment_runner.get_job(job_id)
     if not job:
+        # Try finding on disk
+        results = _results_from_disk(job_id)
+        if results:
+            return results
+            
         raise HTTPException(status_code=404, detail=f"Experiment {job_id} not found")
 
     if job.status not in (ExperimentStatus.COMPLETED, ExperimentStatus.FAILED):

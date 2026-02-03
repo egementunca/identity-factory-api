@@ -38,6 +38,7 @@ class ObfuscationStrategy(str, Enum):
     ABBUTTERFLY = "abbutterfly"
     BBUTTERFLY = "bbutterfly"
     BUTTERFLY = "butterfly"
+    RAC = "rac"
 
 
 class ObfuscationParams(BaseModel):

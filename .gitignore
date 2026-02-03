@@ -22,6 +22,9 @@ venv/
 
 # LMDB
 data/
+*.lmdb
+*.lmdb/
+wire_shuffler.lmdb/
 
 # Logs
 *.log

@@ -57,6 +57,7 @@ def get_db_connection():
         return None
     conn = sqlite3.connect(str(CLUSTER_DB_PATH))
     conn.create_function("has_diverse_targets", 1, has_diverse_targets)
+    conn.create_function("has_reducible_pairs", 1, has_reducible_pairs)
     return conn
 
 
@@ -116,6 +117,12 @@ async def list_cluster_circuits(
     diverse_targets: bool = Query(
         False, description="Only show circuits with >1 unique target"
     ),
+    exclude_reducible: bool = Query(
+        False, description="Exclude circuits with consecutive identical gates"
+    ),
+    only_reducible: bool = Query(
+        False, description="Only show circuits with consecutive identical gates"
+    ),
     limit: int = Query(50, ge=1, le=200, description="Max results"),
     offset: int = Query(0, ge=0, description="Offset for pagination"),
 ):
@@ -142,6 +149,10 @@ async def list_cluster_circuits(
             params.append(gate_set)
         if diverse_targets:
             where_clauses.append("has_diverse_targets(gates) = 1")
+        if exclude_reducible:
+            where_clauses.append("has_reducible_pairs(gates) = 0")
+        if only_reducible:
+            where_clauses.append("has_reducible_pairs(gates) = 1")
 
         where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
@@ -336,6 +347,40 @@ def has_diverse_targets(gates_text: str) -> int:
             unique_targets.add(target)
             if len(unique_targets) > 1:
                 return 1
+        except (ValueError, IndexError):
+            continue
+
+    return 0
+
+
+def has_reducible_pairs(gates_text: str) -> int:
+    """Check if circuit has consecutive identical gates (same target and controls).
+
+    Such circuits are "reducible" because G·G = I for these reversible gates.
+    Returns 1 if reducible pairs exist, 0 otherwise.
+    """
+    if not gates_text:
+        return 0
+
+    gates = gates_text.split(";")
+    prev_gate = None
+
+    for gate_str in gates:
+        if not gate_str:
+            continue
+
+        # Normalize gate representation for comparison
+        # Format: "target:ctrl1,ctrl2" - normalize by sorting controls
+        try:
+            parts = gate_str.split(":")
+            target = parts[0]
+            controls = sorted(parts[1].split(",")) if len(parts) > 1 and parts[1] else []
+            normalized = f"{target}:{','.join(controls)}"
+
+            if prev_gate is not None and normalized == prev_gate:
+                return 1  # Found consecutive identical gates
+
+            prev_gate = normalized
         except (ValueError, IndexError):
             continue
 

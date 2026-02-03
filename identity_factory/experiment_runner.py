@@ -264,6 +264,25 @@ class ExperimentRunner:
                 ),
                 tags=["no-ancilla", "in-place"],
             ),
+            ExperimentPreset(
+                id="rac_standard",
+                name="RAC (Replace And Compress)",
+                description="Uses RAC strategy for obfuscation. "
+                "Different approach than butterfly - replaces and compresses gates iteratively.",
+                experiment_type=ExperimentType.CUSTOM,
+                config=ExperimentConfig(
+                    name="RAC Standard",
+                    experiment_type=ExperimentType.CUSTOM,
+                    wires=64,
+                    initial_gates=100,
+                    obfuscation=ObfuscationParams(
+                        strategy=ObfuscationStrategy.RAC,
+                        rounds=5,
+                        shooting_count=100_000,
+                    ),
+                ),
+                tags=["rac", "replace-compress"],
+            ),
         ]
 
     async def start_experiment(self, config: ExperimentConfig) -> ExperimentJob:
@@ -376,33 +395,57 @@ class ExperimentRunner:
             strategy = config.obfuscation.strategy
             command_name = strategy.value if hasattr(strategy, "value") else strategy
 
-            # Basic command structure
-            obf_cmd = [
-                str(bin_path),
-                command_name,
-                "--path",
-                str(initial_gate),
-                "-n",
-                str(config.wires),
-                "--config",
-                str(obf_config_path),
-                "--rounds",
-                str(config.obfuscation.rounds),
-            ]
+            # RAC uses different CLI args than butterfly strategies
+            is_rac = command_name == "rac"
+            obf_gate = output_dir / "obfuscated.gate"
 
-            # Add strategy-specific flags
-            if command_name == "abbutterfly" and config.obfuscation.bookendless:
-                obf_cmd.append("--bookendless")
+            if is_rac:
+                # RAC command: rac --path <input> --rounds <rounds> --n <wires> --save <output>
+                obf_cmd = [
+                    str(bin_path),
+                    "rac",
+                    "--path",
+                    str(initial_gate),
+                    "--rounds",
+                    str(config.obfuscation.rounds),
+                    "-n",
+                    str(config.wires),
+                    "--save",
+                    str(obf_gate),
+                ]
+            else:
+                # HOTFIX: 'butterfly' subcommand does not support --path/--config args.
+                # Map it to 'abbutterfly' which is the robust implementation.
+                if command_name == "butterfly":
+                    command_name = "abbutterfly"
 
-            if config.lmdb_path:
-                # bbutterfly does not support lmdb-db flag in CLI args generally, 
-                # but abbutterfly does. However, correct way is likely passed via config json or env?
-                # Based on analysis, abbutterfly takes --lmdb-db.
-                # bbutterfly takes env from config or default.
-                # Let's keep it safe: pass if supported.
-                if command_name == "abbutterfly":
-                     obf_cmd.extend(["--lmdb-db", config.lmdb_path])
-                # For others, we assume config.json handles it via "lmdb_path" field.
+                # Basic command structure for butterfly strategies
+                obf_cmd = [
+                    str(bin_path),
+                    command_name,
+                    "--path",
+                    str(initial_gate),
+                    "-n",
+                    str(config.wires),
+                    "--config",
+                    str(obf_config_path),
+                    "--rounds",
+                    str(config.obfuscation.rounds),
+                ]
+
+                # Add strategy-specific flags
+                if command_name == "abbutterfly" and config.obfuscation.bookendless:
+                    obf_cmd.append("--bookendless")
+
+                if config.lmdb_path:
+                    # bbutterfly does not support lmdb-db flag in CLI args generally,
+                    # but abbutterfly does. However, correct way is likely passed via config json or env?
+                    # Based on analysis, abbutterfly takes --lmdb-db.
+                    # bbutterfly takes env from config or default.
+                    # Let's keep it safe: pass if supported.
+                    if command_name == "abbutterfly":
+                         obf_cmd.extend(["--lmdb-db", config.lmdb_path])
+                    # For others, we assume config.json handles it via "lmdb_path" field.
 
             # Save config JSON for reproducibility
             config_json = output_dir / "config.json"
@@ -469,16 +512,24 @@ class ExperimentRunner:
                     f"Obfuscation failed with code {process.returncode}. Check log output above."
                 )
 
-            # Move output
-            recent_circuit = LOCAL_MIXING_DIR / "recent_circuit.txt"
-            obf_gate = output_dir / "obfuscated.gate"
-
-            if recent_circuit.exists():
-                shutil.move(str(recent_circuit), str(obf_gate))
-                with open(obf_gate) as f:
-                    job.final_gates = f.read().count(";")
+            # Handle output based on strategy
+            # RAC saves directly to obf_gate via --save; butterfly strategies use recent_circuit.txt
+            if is_rac:
+                # RAC already saved output to obf_gate
+                if obf_gate.exists():
+                    with open(obf_gate) as f:
+                        job.final_gates = f.read().count(";")
+                else:
+                    job.final_gates = job.current_gates
             else:
-                job.final_gates = job.current_gates
+                # Butterfly strategies write to recent_circuit.txt
+                recent_circuit = LOCAL_MIXING_DIR / "recent_circuit.txt"
+                if recent_circuit.exists():
+                    shutil.move(str(recent_circuit), str(obf_gate))
+                    with open(obf_gate) as f:
+                        job.final_gates = f.read().count(";")
+                else:
+                    job.final_gates = job.current_gates
 
             job.log_lines.append(
                 f"[{datetime.now().strftime('%H:%M:%S')}] Obfuscation complete"

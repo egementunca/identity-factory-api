@@ -243,12 +243,27 @@ def create_app(
 
     app.include_router(perm_db_router, prefix="/api/v1", tags=["perm-database"])
 
+    # Include Wire Shuffler database endpoints
+    from .wire_shuffler_endpoints import router as wire_shuffler_router
+
+    app.include_router(wire_shuffler_router, prefix="/api/v1", tags=["wire-shuffler"])
+
     # Include Experiment endpoints (run local_mixing experiments with progress streaming)
     from .experiment_endpoints import router as experiment_router
 
     app.include_router(
         experiment_router, prefix="/api/v1/experiments", tags=["experiments"]
     )
+
+    # Include Skeleton Database endpoints (skeleton chain identity circuits)
+    from .skeleton_db_endpoints import router as skeleton_db_router
+
+    app.include_router(skeleton_db_router, prefix="/api/v1", tags=["skeleton-database"])
+
+    # Include Unified Search endpoints (search across all databases)
+    from .unified_search_endpoints import router as unified_search_router
+
+    app.include_router(unified_search_router, prefix="/api/v1", tags=["unified-search"])
 
     # Mount static files directory for frontend assets (if exists)
     import os
