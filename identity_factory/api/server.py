@@ -248,6 +248,11 @@ def create_app(
 
     app.include_router(wire_shuffler_router, prefix="/api/v1", tags=["wire-shuffler"])
 
+    # Include Waksman network endpoints (O(n log n) permutation circuits)
+    from .waksman_endpoints import router as waksman_router
+
+    app.include_router(waksman_router, prefix="/api/v1", tags=["waksman"])
+
     # Include Experiment endpoints (run local_mixing experiments with progress streaming)
     from .experiment_endpoints import router as experiment_router
 

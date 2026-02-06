@@ -365,3 +365,313 @@ class WireShufflerDatabase:
                     (row["id"],),
                 )
             conn.commit()
+
+    # =====================
+    # Query methods
+    # =====================
+
+    def get_permutation_by_hash(self, width: int, perm_hash: str) -> Optional[WirePermutationRecord]:
+        """Get permutation by width and hash."""
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                SELECT * FROM wire_permutations
+                WHERE width = ? AND wire_perm_hash = ?
+            """,
+                (width, perm_hash),
+            )
+            row = cursor.fetchone()
+            if row:
+                return WirePermutationRecord(
+                    id=row["id"],
+                    width=row["width"],
+                    wire_perm=json.loads(row["wire_perm"]),
+                    wire_perm_hash=row["wire_perm_hash"],
+                    fixed_points=row["fixed_points"],
+                    hamming=row["hamming"],
+                    cycles=row["cycles"],
+                    swap_distance=row["swap_distance"],
+                    cycle_type=row["cycle_type"],
+                    parity=row["parity"],
+                    is_identity=bool(row["is_identity"]),
+                    created_at=row["created_at"],
+                )
+            return None
+
+    def get_circuits_for_perm(self, perm_id: int) -> List[WireShufflerCircuit]:
+        """Get all circuits for a permutation."""
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                SELECT * FROM wire_shuffler_circuits
+                WHERE perm_id = ?
+                ORDER BY gate_count ASC
+            """,
+                (perm_id,),
+            )
+            results = []
+            for row in cursor.fetchall():
+                results.append(
+                    WireShufflerCircuit(
+                        id=row["id"],
+                        run_id=row["run_id"],
+                        perm_id=row["perm_id"],
+                        found=bool(row["found"]),
+                        gate_count=row["gate_count"],
+                        gates=json.loads(row["gates"]) if row["gates"] else None,
+                        circuit_hash=row["circuit_hash"],
+                        full_perm=json.loads(row["full_perm"]) if row["full_perm"] else None,
+                        verify_ok=bool(row["verify_ok"]) if row["verify_ok"] is not None else None,
+                        synth_time_ms=row["synth_time_ms"],
+                        is_best=bool(row["is_best"]),
+                        created_at=row["created_at"],
+                    )
+                )
+            return results
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Get database statistics."""
+        with self._connect() as conn:
+            stats = {}
+
+            # Permutation stats
+            cursor = conn.execute("SELECT COUNT(*) as count FROM wire_permutations")
+            stats["total_permutations"] = cursor.fetchone()["count"]
+
+            # Circuit stats
+            cursor = conn.execute("SELECT COUNT(*) as count FROM wire_shuffler_circuits WHERE found = 1")
+            stats["total_circuits"] = cursor.fetchone()["count"]
+
+            # By width
+            cursor = conn.execute(
+                """
+                SELECT width, COUNT(*) as count
+                FROM wire_permutations
+                GROUP BY width
+                ORDER BY width
+            """
+            )
+            stats["permutations_by_width"] = {row["width"]: row["count"] for row in cursor.fetchall()}
+
+            # Circuits by width
+            cursor = conn.execute(
+                """
+                SELECT p.width, COUNT(*) as count
+                FROM wire_shuffler_circuits c
+                JOIN wire_permutations p ON c.perm_id = p.id
+                WHERE c.found = 1
+                GROUP BY p.width
+                ORDER BY p.width
+            """
+            )
+            stats["circuits_by_width"] = {row["width"]: row["count"] for row in cursor.fetchall()}
+
+            return stats
+
+
+# =====================
+# Waksman Circuit Support
+# =====================
+
+
+@dataclass
+class WaksmanCircuitRecord:
+    """Record for a Waksman-generated circuit."""
+
+    id: Optional[int]
+    perm_id: int
+    gate_count: int
+    gates: List[Tuple[int, int, int]]
+    swap_count: int
+    synth_time_ms: Optional[int] = None
+    verify_ok: Optional[bool] = None
+    circuit_hash: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class WaksmanCircuitDatabase(WireShufflerDatabase):
+    """Extended database with Waksman circuit support."""
+
+    def _init_schema(self) -> None:
+        """Initialize schema including Waksman tables."""
+        # First init parent schema
+        super()._init_schema()
+
+        # Add Waksman-specific table
+        with self._connect() as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS waksman_circuits (
+                    id INTEGER PRIMARY KEY,
+                    perm_id INTEGER NOT NULL,
+                    gate_count INTEGER NOT NULL,
+                    gates TEXT NOT NULL,
+                    swap_count INTEGER NOT NULL,
+                    synth_time_ms INTEGER,
+                    verify_ok BOOLEAN,
+                    circuit_hash TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (perm_id) REFERENCES wire_permutations(id)
+                )
+            """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_waksman_perm ON waksman_circuits(perm_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_waksman_gatecount ON waksman_circuits(gate_count)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_waksman_swapcount ON waksman_circuits(swap_count)"
+            )
+            conn.commit()
+
+    def insert_waksman_circuit(self, record: WaksmanCircuitRecord) -> int:
+        """Insert a Waksman-generated circuit."""
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO waksman_circuits
+                (perm_id, gate_count, gates, swap_count, synth_time_ms, verify_ok, circuit_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+                (
+                    record.perm_id,
+                    record.gate_count,
+                    json.dumps(record.gates),
+                    record.swap_count,
+                    record.synth_time_ms,
+                    int(record.verify_ok) if record.verify_ok is not None else None,
+                    record.circuit_hash,
+                ),
+            )
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_waksman_for_perm(self, perm_id: int) -> Optional[WaksmanCircuitRecord]:
+        """Get Waksman circuit for a permutation."""
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                SELECT * FROM waksman_circuits
+                WHERE perm_id = ?
+                ORDER BY gate_count ASC
+                LIMIT 1
+            """,
+                (perm_id,),
+            )
+            row = cursor.fetchone()
+            if row:
+                return WaksmanCircuitRecord(
+                    id=row["id"],
+                    perm_id=row["perm_id"],
+                    gate_count=row["gate_count"],
+                    gates=json.loads(row["gates"]),
+                    swap_count=row["swap_count"],
+                    synth_time_ms=row["synth_time_ms"],
+                    verify_ok=bool(row["verify_ok"]) if row["verify_ok"] is not None else None,
+                    circuit_hash=row["circuit_hash"],
+                    created_at=row["created_at"],
+                )
+            return None
+
+    def get_waksman_circuits(
+        self, width: Optional[int] = None, limit: int = 100, offset: int = 0
+    ) -> List[WaksmanCircuitRecord]:
+        """Get Waksman circuits with optional filtering."""
+        with self._connect() as conn:
+            if width is not None:
+                cursor = conn.execute(
+                    """
+                    SELECT w.* FROM waksman_circuits w
+                    JOIN wire_permutations p ON w.perm_id = p.id
+                    WHERE p.width = ?
+                    ORDER BY w.gate_count ASC
+                    LIMIT ? OFFSET ?
+                """,
+                    (width, limit, offset),
+                )
+            else:
+                cursor = conn.execute(
+                    """
+                    SELECT * FROM waksman_circuits
+                    ORDER BY gate_count ASC
+                    LIMIT ? OFFSET ?
+                """,
+                    (limit, offset),
+                )
+
+            results = []
+            for row in cursor.fetchall():
+                results.append(
+                    WaksmanCircuitRecord(
+                        id=row["id"],
+                        perm_id=row["perm_id"],
+                        gate_count=row["gate_count"],
+                        gates=json.loads(row["gates"]),
+                        swap_count=row["swap_count"],
+                        synth_time_ms=row["synth_time_ms"],
+                        verify_ok=bool(row["verify_ok"]) if row["verify_ok"] is not None else None,
+                        circuit_hash=row["circuit_hash"],
+                        created_at=row["created_at"],
+                    )
+                )
+            return results
+
+    def get_waksman_stats(self) -> Dict[str, Any]:
+        """Get Waksman circuit statistics."""
+        with self._connect() as conn:
+            stats = {}
+
+            # Total Waksman circuits
+            cursor = conn.execute("SELECT COUNT(*) as count FROM waksman_circuits")
+            stats["total_waksman_circuits"] = cursor.fetchone()["count"]
+
+            # By width
+            cursor = conn.execute(
+                """
+                SELECT p.width, COUNT(*) as count, AVG(w.gate_count) as avg_gates, AVG(w.swap_count) as avg_swaps
+                FROM waksman_circuits w
+                JOIN wire_permutations p ON w.perm_id = p.id
+                GROUP BY p.width
+                ORDER BY p.width
+            """
+            )
+            stats["waksman_by_width"] = {
+                row["width"]: {
+                    "count": row["count"],
+                    "avg_gates": round(row["avg_gates"], 2) if row["avg_gates"] else 0,
+                    "avg_swaps": round(row["avg_swaps"], 2) if row["avg_swaps"] else 0,
+                }
+                for row in cursor.fetchall()
+            }
+
+            return stats
+
+    def compare_sat_vs_waksman(self, perm_id: int) -> Dict[str, Any]:
+        """Compare SAT-synthesized vs Waksman circuit for a permutation."""
+        sat_circuits = self.get_circuits_for_perm(perm_id)
+        waksman_circuit = self.get_waksman_for_perm(perm_id)
+
+        result = {
+            "perm_id": perm_id,
+            "sat_available": len(sat_circuits) > 0,
+            "waksman_available": waksman_circuit is not None,
+            "sat_gate_count": None,
+            "waksman_gate_count": None,
+            "gate_count_diff": None,
+        }
+
+        if sat_circuits:
+            found_circuits = [c for c in sat_circuits if c.found and c.gate_count is not None]
+            if found_circuits:
+                best_sat = min(found_circuits, key=lambda c: c.gate_count)
+                result["sat_gate_count"] = best_sat.gate_count
+
+        if waksman_circuit:
+            result["waksman_gate_count"] = waksman_circuit.gate_count
+
+        if result["sat_gate_count"] and result["waksman_gate_count"]:
+            result["gate_count_diff"] = result["waksman_gate_count"] - result["sat_gate_count"]
+
+        return result

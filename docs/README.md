@@ -89,4 +89,3 @@ These are important when planning cleanup or refactor work:
 - `go_database_endpoints.py` requires `go-proj` binaries (`go_stats`, `go_explore`) and `db/*.gob` files which are not in this repo.
 - `sat_database_endpoints.py` depends on `sat_circuits.db`, which is not present.
 - `advanced_endpoints.py` expects `identity_circuits_analysis/` and optionally `go-proj/go_compress`.
-- `gate57_library.json` is present but not referenced in code.

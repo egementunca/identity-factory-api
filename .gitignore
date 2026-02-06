@@ -29,5 +29,9 @@ wire_shuffler.lmdb/
 # Logs
 *.log
 
+# Coverage
+.coverage
+htmlcov/
+
 # OS
 .DS_Store
