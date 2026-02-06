@@ -1,0 +1,10 @@
+# LMDB lock files are machine-specific; only `data.mdb` should be shared.
+**/lock.mdb
+
+# Python caches
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+

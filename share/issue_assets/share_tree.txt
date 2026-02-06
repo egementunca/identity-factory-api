@@ -1,0 +1,35 @@
+== share/ ==
+total 2064
+-rw-r--r--@  1 egementunca  staff   1.4K Feb  6 14:56 README.md
+-rwxr-xr-x@  1 egementunca  staff   7.4K Feb  6 14:21 import_waksman_circuits.py
+drwxr-xr-x@ 16 egementunca  staff   512B Feb  6 15:28 issue_assets
+-rwxr-xr-x@  1 egementunca  staff   4.2K Feb  6 14:22 merge_skeleton_identities_lmdb.py
+drwxr-xr-x@  3 egementunca  staff    96B Feb  6 15:46 skeleton_ids_n4_n7.lmdb
+-rw-r--r--@  1 egementunca  staff    60K Feb  6 14:29 waksman_circuits_export_2026-02-06.json
+-rw-r--r--@  1 egementunca  staff   952K Feb  6 14:28 wire_shuffler.db
+drwxr-xr-x@  3 egementunca  staff    96B Feb  6 14:55 wire_shuffler.lmdb
+
+== share/issue_assets/ ==
+total 1576
+-rw-r--r--@ 1 egementunca  staff   792B Feb  6 15:28 README.md
+-rw-r--r--@ 1 egementunca  staff   2.2K Feb  6 15:29 checksums_sha256.txt
+-rw-r--r--@ 1 egementunca  staff   183K Feb  6 14:54 dtw_alignment_wire_shuffle_align_8w_insert_mix_2026-02-03.png
+-rw-r--r--@ 1 egementunca  staff   115K Feb  6 14:54 dtw_heatmap_wire_shuffle_align_8w_insert_mix_2026-02-03.png
+-rw-r--r--@ 1 egementunca  staff   667B Feb  6 15:47 share_tree.txt
+-rw-r--r--@ 1 egementunca  staff   141K Feb  6 14:54 skeleton_db_stats.png
+-rw-r--r--@ 1 egementunca  staff   2.7K Feb  6 14:53 skeleton_db_stats.txt
+-rw-r--r--@ 1 egementunca  staff   205K Feb  6 14:54 skeleton_graph_example_2026-01-06.png
+-rw-r--r--@ 1 egementunca  staff    23K Feb  6 15:28 skeleton_identity_verify.png
+-rw-r--r--@ 1 egementunca  staff   424B Feb  6 15:28 skeleton_identity_verify.txt
+-rw-r--r--@ 1 egementunca  staff    27K Feb  6 15:28 waksman_circuits_verify.png
+-rw-r--r--@ 1 egementunca  staff   464B Feb  6 15:28 waksman_circuits_verify.txt
+-rw-r--r--@ 1 egementunca  staff    56K Feb  6 14:54 waksman_db_summary.png
+-rw-r--r--@ 1 egementunca  staff   1.5K Feb  6 14:53 waksman_db_summary.txt
+
+== share/skeleton_ids_n4_n7.lmdb/ ==
+total 2144
+-rw-r--r--@ 1 egementunca  staff   1.0M Feb  6 14:18 data.mdb
+
+== share/wire_shuffler.lmdb/ ==
+total 4576
+-rw-r--r--@ 1 egementunca  staff   2.2M Feb  6 14:28 data.mdb

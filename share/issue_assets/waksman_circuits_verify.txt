@@ -1,0 +1,11 @@
+Waksman/swap-circuit verification (random sampling)
+DB: share/wire_shuffler.db
+Checked: output[i] == input[perm[i]] for i in [0..n-1], and aux wire unchanged
+Date: 2026-02-06
+
+id=1 n=16 gates=72 aux=16 verify_ok_db=1 random_trials=512 ok=True
+id=2 n=32 gates=150 aux=32 verify_ok_db=1 random_trials=512 ok=True
+id=3 n=64 gates=366 aux=64 verify_ok_db=1 random_trials=512 ok=True
+id=4 n=64 gates=330 aux=64 verify_ok_db=1 random_trials=512 ok=True
+
+overall_ok=True

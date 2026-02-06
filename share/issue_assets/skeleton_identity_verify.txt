@@ -1,0 +1,11 @@
+Skeleton identity LMDB verification
+DB: share/skeleton_ids_n4_n7.lmdb
+Checked: identity property (full truth table) + adjacent collisions
+Date: 2026-02-06
+
+ids_n4: circuits=264 identity_ok=True fully_noncommuting=True
+ids_n5: circuits=2440 identity_ok=True fully_noncommuting=True
+ids_n6: circuits=889 identity_ok=True fully_noncommuting=True
+ids_n7: circuits=11080 identity_ok=True fully_noncommuting=True
+
+overall_ok=True

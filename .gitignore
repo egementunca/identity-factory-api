@@ -35,3 +35,7 @@ htmlcov/
 
 # OS
 .DS_Store
+
+# Share package (tracked small exports, even if matching ignored extensions)
+!share/
+!share/**

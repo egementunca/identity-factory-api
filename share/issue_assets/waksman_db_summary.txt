@@ -1,0 +1,30 @@
+== .schema waksman_circuits ==
+CREATE TABLE waksman_circuits (
+                    id INTEGER PRIMARY KEY,
+                    perm_id INTEGER NOT NULL,
+                    gate_count INTEGER NOT NULL,
+                    gates TEXT NOT NULL,
+                    swap_count INTEGER NOT NULL,
+                    synth_time_ms INTEGER,
+                    verify_ok BOOLEAN,
+                    circuit_hash TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (perm_id) REFERENCES wire_permutations(id)
+                );
+CREATE INDEX idx_waksman_perm ON waksman_circuits(perm_id);
+CREATE INDEX idx_waksman_gatecount ON waksman_circuits(gate_count);
+CREATE INDEX idx_waksman_swapcount ON waksman_circuits(swap_count);
+
+== waksman circuits summary ==
+waksman_id  width  swap_distance  hamming  parity  gate_count  swap_count  synth_time_ms  verify_ok
+----------  -----  -------------  -------  ------  ----------  ----------  -------------  ---------
+1           16     12             15       even    72          12          0              1        
+2           32     25             31       odd     150         25          0              1        
+3           64     61             64       odd     366         61          1              1        
+4           64     55             62       odd     330         55          0              1        
+
+== row counts ==
+table_name         n_rows
+-----------------  ------
+wire_permutations  754   
+waksman_circuits   4     

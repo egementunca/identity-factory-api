@@ -1,0 +1,64 @@
+
+=== Database Statistics ===
+
+--- ids_n3: Database ids_n3 not found ---
+
+--- ids_n4 ---
+  Total circuits: 264
+  Taxonomies: 6
+  All fully noncommuting: True
+  Circuit sizes: {6: 72, 8: 192}
+  Taxonomies:
+    ('OnCtrl1', 'OnActive', 'OnActive'): 24 circuits, sizes={6: 24}
+    ('OnCtrl1', 'OnActive', 'OnActive'): 24 circuits, sizes={8: 24}
+    ('OnCtrl1', 'OnActive', 'OnActive'): 72 circuits, sizes={8: 48, 6: 24}
+    ('OnCtrl2', 'OnActive', 'OnActive'): 24 circuits, sizes={8: 24}
+    ('OnCtrl2', 'OnActive', 'OnActive'): 48 circuits, sizes={8: 48}
+    ('OnNew', 'OnActive', 'OnActive'): 72 circuits, sizes={8: 48, 6: 24}
+
+--- ids_n5 ---
+  Total circuits: 2440
+  Taxonomies: 10
+  All fully noncommuting: True
+  Circuit sizes: {10: 2400, 8: 40}
+  Taxonomies:
+    ('OnCtrl1', 'OnActive', 'OnActive'): 600 circuits, sizes={10: 600}
+    ('OnCtrl1', 'OnActive', 'OnActive'): 120 circuits, sizes={10: 120}
+    ('OnCtrl1', 'OnActive', 'OnActive'): 20 circuits, sizes={8: 20}
+    ('OnCtrl2', 'OnActive', 'OnActive'): 120 circuits, sizes={10: 120}
+    ('OnCtrl2', 'OnActive', 'OnActive'): 240 circuits, sizes={10: 240}
+    ('OnCtrl2', 'OnActive', 'OnActive'): 240 circuits, sizes={10: 240}
+    ('OnNew', 'OnActive', 'OnActive'): 600 circuits, sizes={10: 600}
+    ('OnNew', 'OnActive', 'OnActive'): 20 circuits, sizes={8: 20}
+    ('OnNew', 'OnActive', 'OnActive'): 240 circuits, sizes={10: 240}
+    ('OnNew', 'OnActive', 'OnActive'): 240 circuits, sizes={10: 240}
+
+--- ids_n6 ---
+  Total circuits: 889
+  Taxonomies: 2
+  All fully noncommuting: True
+  Circuit sizes: {12: 849, 10: 40}
+  Taxonomies:
+    ('OnCtrl1', 'OnActive', 'OnActive'): 849 circuits, sizes={12: 849}
+    ('OnNew', 'OnActive', 'OnActive'): 40 circuits, sizes={10: 40}
+
+--- ids_n7 ---
+  Total circuits: 11080
+  Taxonomies: 13
+  All fully noncommuting: True
+  Circuit sizes: {14: 11000, 12: 80}
+  Taxonomies:
+    ('OnCtrl1', 'OnActive', 'OnActive'): 1000 circuits, sizes={14: 1000}
+    ('OnCtrl1', 'OnActive', 'OnActive'): 1000 circuits, sizes={14: 1000}
+    ('OnCtrl1', 'OnActive', 'OnActive'): 1000 circuits, sizes={14: 1000}
+    ('OnCtrl1', 'OnActive', 'OnActive'): 1000 circuits, sizes={14: 1000}
+    ('OnCtrl2', 'OnActive', 'OnActive'): 1000 circuits, sizes={14: 1000}
+    ('OnCtrl2', 'OnActive', 'OnActive'): 1000 circuits, sizes={14: 1000}
+    ('OnCtrl2', 'OnActive', 'OnActive'): 40 circuits, sizes={12: 40}
+    ('OnNew', 'OnActive', 'OnActive'): 1000 circuits, sizes={14: 1000}
+    ('OnNew', 'OnActive', 'OnActive'): 1000 circuits, sizes={14: 1000}
+    ('OnNew', 'OnActive', 'OnActive'): 1000 circuits, sizes={14: 1000}
+    ('OnNew', 'OnActive', 'OnActive'): 1000 circuits, sizes={14: 1000}
+    ('OnNew', 'OnActive', 'OnActive'): 1000 circuits, sizes={14: 1000}
+    ('OnNew', 'OnActive', 'OnActive'): 40 circuits, sizes={12: 40}
+
