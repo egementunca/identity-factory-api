@@ -238,19 +238,19 @@ async def search_eca57_lmdb(
 async def search_sqlite(
     width: Optional[int],
     gate_count: Optional[int],
-    limit: int
+    limit: int,
+    circuit_source: Optional[str] = None
 ) -> List[UnifiedCircuitResult]:
     """Search SQLite circuits database."""
     results = []
 
     try:
-        # Import from parent package
-        from identity_factory.database import Database
+        import sqlite3
 
         db_path = Path(
             os.environ.get(
                 "IDENTITY_FACTORY_DB_PATH",
-                Path(__file__).parent.parent.parent / "identity_circuits.db"
+                Path(__file__).parent.parent.parent / "cluster_circuits.db"
             )
         )
 
@@ -258,11 +258,19 @@ async def search_sqlite(
             logger.warning(f"SQLite DB not found at {db_path}")
             return []
 
-        db = Database(str(db_path))
+        conn = sqlite3.connect(str(db_path))
 
         # Build query
         query = "SELECT * FROM circuits WHERE 1=1"
         params = []
+
+        # Filter by circuit source (e.g., swap_flip_no_flip, swap_flip_flip_wire0)
+        if circuit_source:
+            if circuit_source == "swap_flip":
+                query += " AND source LIKE 'swap_flip%'"
+            else:
+                query += " AND source = ?"
+                params.append(circuit_source)
 
         if width is not None:
             query += " AND width = ?"
@@ -274,7 +282,7 @@ async def search_sqlite(
 
         query += f" LIMIT {limit}"
 
-        cursor = db.conn.execute(query, params)
+        cursor = conn.execute(query, params)
         for row in cursor:
             circuit_id = row[0]
             w = row[1]
@@ -282,7 +290,21 @@ async def search_sqlite(
             gates_json = row[3]
             perm_json = row[4]
 
-            gates = json.loads(gates_json) if isinstance(gates_json, str) else gates_json
+            # Handle both JSON format and old semicolon-separated format
+            if isinstance(gates_json, str) and gates_json.startswith('['):
+                gates = json.loads(gates_json)
+            elif isinstance(gates_json, str) and ';' in gates_json:
+                # Old format: "0:1,2;0:1,2" -> [[0,1,2], [0,1,2]]
+                gates = []
+                for gate_str in gates_json.rstrip(';').split(';'):
+                    parts = gate_str.split(':')
+                    if len(parts) == 2:
+                        target = int(parts[0])
+                        ctrls = [int(x) for x in parts[1].split(',')]
+                        if len(ctrls) == 2:
+                            gates.append([target, ctrls[0], ctrls[1]])
+            else:
+                continue
 
             # Convert gate format if needed (may be tuples with gate type)
             normalized_gates = []
@@ -298,8 +320,16 @@ async def search_sqlite(
                 continue
 
             # Check if identity (permutation is identity)
-            perm = json.loads(perm_json) if isinstance(perm_json, str) else perm_json
-            is_identity = perm == list(range(len(perm))) if perm else False
+            is_identity = False
+            if isinstance(perm_json, str):
+                if perm_json == 'identity':
+                    is_identity = True
+                elif perm_json.startswith('['):
+                    try:
+                        perm = json.loads(perm_json)
+                        is_identity = perm == list(range(len(perm)))
+                    except:
+                        pass
 
             results.append(UnifiedCircuitResult(
                 id=f"sqlite:{circuit_id}",
@@ -325,6 +355,10 @@ async def search_circuits(
     sources: List[str] = Query(
         ["skeleton", "eca57-lmdb", "sqlite"],
         description="Database sources to query"
+    ),
+    circuit_source: Optional[str] = Query(
+        None,
+        description="Filter by circuit source type (e.g., 'swap_flip' for all swap-flip gadgets, or specific like 'swap_flip_no_flip')"
     ),
     limit: int = Query(30, ge=1, le=100, description="Maximum results to return"),
     is_identity_only: bool = Query(True, description="Only return identity circuits"),
@@ -354,7 +388,7 @@ async def search_circuits(
     if "eca57-lmdb" in sources:
         tasks.append(("eca57-lmdb", search_eca57_lmdb(width, gate_count, per_source_limit)))
     if "sqlite" in sources:
-        tasks.append(("sqlite", search_sqlite(width, gate_count, per_source_limit)))
+        tasks.append(("sqlite", search_sqlite(width, gate_count, per_source_limit, circuit_source)))
 
     # Run searches concurrently
     for source, task in tasks:

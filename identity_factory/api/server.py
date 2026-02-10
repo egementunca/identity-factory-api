@@ -270,6 +270,11 @@ def create_app(
 
     app.include_router(unified_search_router, prefix="/api/v1", tags=["unified-search"])
 
+    # Include Imported Identities endpoints (big_identities.txt and external imports)
+    from .imported_identity_endpoints import router as imported_identity_router
+
+    app.include_router(imported_identity_router, prefix="/api/v1", tags=["imported-identities"])
+
     # Mount static files directory for frontend assets (if exists)
     import os
 
