@@ -400,6 +400,19 @@ class ExperimentRunner:
             obf_gate = output_dir / "obfuscated.gate"
 
             if is_rac:
+                lmdb_dir = LOCAL_MIXING_DIR / "db"
+                sqlite_path = lmdb_dir / "circuits.db"
+                lmdb_data = lmdb_dir / "data.mdb"
+                if not sqlite_path.exists():
+                    raise RuntimeError(
+                        "RAC requires SQLite db at local_mixing/db/circuits.db (rainbow tables)."
+                    )
+                if not lmdb_data.exists():
+                    raise RuntimeError(
+                        "RAC requires LMDB at local_mixing/db/data.mdb (ids_n*, ids_rev, perm tables)."
+                    )
+
+            if is_rac:
                 # RAC command: rac --path <input> --rounds <rounds> --n <wires> --save <output>
                 obf_cmd = [
                     str(bin_path),

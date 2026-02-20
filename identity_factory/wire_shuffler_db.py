@@ -8,6 +8,7 @@ Stores SAT-synthesized ECA57 circuits that implement wire permutations:
 from __future__ import annotations
 
 import hashlib
+import os
 import json
 import sqlite3
 from dataclasses import dataclass
@@ -83,7 +84,10 @@ class WireShufflerMetrics:
 class WireShufflerDatabase:
     def __init__(self, db_path: Optional[str] = None):
         if db_path is None:
-            db_path = str(Path(__file__).resolve().parent.parent / "wire_shuffler.db")
+            db_path = os.environ.get(
+                "WIRE_SHUFFLER_DB_PATH",
+                str(Path(__file__).resolve().parent.parent / "wire_shuffler.db"),
+            )
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_schema()

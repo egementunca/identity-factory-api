@@ -8,6 +8,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -315,7 +316,15 @@ def create_scheduler(db_path: Optional[str] = None) -> FactoryScheduler:
         Configured FactoryScheduler
     """
     if db_path is None:
-        db_path = str(Path.home() / ".identity_factory" / "circuits.db")
+        env_path = os.environ.get("IDENTITY_FACTORY_DB_PATH")
+        if env_path:
+            db_path = str(Path(env_path).expanduser())
+        else:
+            cluster_db = Path(__file__).resolve().parent.parent.parent / "cluster_circuits.db"
+            if cluster_db.exists():
+                db_path = str(cluster_db)
+            else:
+                db_path = str(Path.home() / ".identity_factory" / "circuits.db")
 
     database = CircuitDatabase(db_path)
 
