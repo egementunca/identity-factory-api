@@ -67,6 +67,17 @@ Notes:
 Other env vars used by API modules:
 - `SAT_REVSYNTH_PATH` - Path to `sat_revsynth` (used by ECA57 LMDB endpoints).
 - `ECA57_LMDB_PATH` - Override LMDB directory.
+- `LOCAL_MIXING_DB_PATH` - Override skeleton LMDB directory.
+
+### Recommended defaults
+To keep UI and API behavior consistent:
+- `IDENTITY_FACTORY_DB_PATH=~/.identity_factory/circuits.db`
+- `ECA57_LMDB_PATH=<path to eca57_identities_lmdb>`
+- `LOCAL_MIXING_DB_PATH=<path to skeleton lmdb>`
+
+### DB status endpoint
+`GET /api/v1/db-status` returns a structured inventory of DB paths, sizes, and row counts.
+Use this to validate local setup or populate a status page in the UI.
 
 ## External dependencies
 - `sat_revsynth` (Python): provides `Circuit`, SAT solvers, unroll and reduction utilities.
