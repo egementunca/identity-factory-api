@@ -13,13 +13,14 @@ from pydantic import BaseModel, Field
 
 from ..database import CircuitDatabase, CircuitRecord, DimGroupRecord
 from ..generators import GenerationProgress, GeneratorStatus, get_registry
+from .db_paths import resolve_identity_db_path
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/generators", tags=["generators"])
 
 # Database path for circuit storage
-_db_path = Path.home() / ".identity_factory" / "circuits.db"
+_db_path = resolve_identity_db_path()
 _db_path.parent.mkdir(parents=True, exist_ok=True)
 
 # In-memory storage for run tracking

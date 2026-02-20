@@ -275,6 +275,11 @@ def create_app(
 
     app.include_router(imported_identity_router, prefix="/api/v1", tags=["imported-identities"])
 
+    # Include DB status endpoint
+    from .db_status_endpoints import router as db_status_router
+
+    app.include_router(db_status_router, prefix="/api/v1", tags=["system"])
+
     # Mount static files directory for frontend assets (if exists)
     import os
 

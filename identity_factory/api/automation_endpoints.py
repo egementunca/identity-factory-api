@@ -30,7 +30,7 @@ def get_scheduler() -> FactoryScheduler:
     return _scheduler
 
 
-@router.post("/automation/generate")
+@router.post("/generate")
 async def trigger_generation(
     count: int = Query(
         100, ge=1, le=10000, description="Number of circuits to generate"
@@ -55,7 +55,7 @@ async def trigger_generation(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/automation/unroll")
+@router.post("/unroll")
 async def trigger_unroll(
     max_circuits: int = Query(50, ge=1, le=1000, description="Max circuits to unroll"),
     equivalents_per: int = Query(
@@ -83,7 +83,7 @@ async def trigger_unroll(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/automation/filter")
+@router.post("/filter")
 async def trigger_quality_filter() -> Dict[str, Any]:
     """
     Trigger quality filtering based on non-triviality score.
@@ -100,7 +100,7 @@ async def trigger_quality_filter() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/automation/full-cycle")
+@router.post("/full-cycle")
 async def trigger_full_cycle() -> Dict[str, Any]:
     """
     Trigger a complete generation -> unroll -> filter cycle.
@@ -117,7 +117,7 @@ async def trigger_full_cycle() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/automation/stats")
+@router.get("/stats")
 async def get_scheduler_stats() -> Dict[str, Any]:
     """
     Get automation scheduler statistics.

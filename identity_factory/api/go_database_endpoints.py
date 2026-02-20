@@ -8,6 +8,7 @@ WARNING: This module depends on the `obfuscated-circuits/go-proj` directory whic
 These endpoints will fail until the Go binaries (`go_stats`, `go_explore`) and database files are restored.
 """
 import logging
+import os
 import pickle
 import struct
 from pathlib import Path
@@ -20,9 +21,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/go-database", tags=["go-database"])
 
-# Path to Go database files
-GO_PROJ_DIR = Path(__file__).parent.parent.parent / "go-proj"
-GO_DB_DIR = GO_PROJ_DIR / "db"
+# Path to Go database files (override via env)
+GO_PROJ_DIR = Path(
+    os.environ.get("GO_PROJ_DIR", Path(__file__).parent.parent.parent / "go-proj")
+).expanduser()
+GO_DB_DIR = Path(os.environ.get("GO_DB_DIR", GO_PROJ_DIR / "db")).expanduser()
 
 
 class GoCircuitInfo(BaseModel):

@@ -235,6 +235,28 @@ async def search_eca57_lmdb(
     return results
 
 
+def _default_identity_db_path() -> Path:
+    env_path = os.environ.get("IDENTITY_FACTORY_DB_PATH")
+    if env_path:
+        return Path(env_path).expanduser()
+    cluster_db = _cluster_db_path()
+    if cluster_db.exists():
+        return cluster_db
+    return Path.home() / ".identity_factory" / "circuits.db"
+
+
+def _cluster_db_path() -> Path:
+    return Path(__file__).parent.parent.parent / "cluster_circuits.db"
+
+
+def _table_has_column(conn, table: str, column: str) -> bool:
+    try:
+        cur = conn.execute(f"PRAGMA table_info({table})")
+        return any(row[1] == column for row in cur.fetchall())
+    except Exception:
+        return False
+
+
 async def search_sqlite(
     width: Optional[int],
     gate_count: Optional[int],
@@ -247,18 +269,29 @@ async def search_sqlite(
     try:
         import sqlite3
 
-        db_path = Path(
-            os.environ.get(
-                "IDENTITY_FACTORY_DB_PATH",
-                Path(__file__).parent.parent.parent / "cluster_circuits.db"
-            )
-        )
+        primary_db = _default_identity_db_path()
+        fallback_db = _cluster_db_path()
+
+        db_path = primary_db if primary_db.exists() else fallback_db
 
         if not db_path.exists():
             logger.warning(f"SQLite DB not found at {db_path}")
             return []
 
         conn = sqlite3.connect(str(db_path))
+
+        if circuit_source and not _table_has_column(conn, "circuits", "source"):
+            conn.close()
+            if fallback_db.exists():
+                conn = sqlite3.connect(str(fallback_db))
+                if not _table_has_column(conn, "circuits", "source"):
+                    conn.close()
+                    logger.warning("Circuit source filtering requested but no DB has a 'source' column")
+                    return []
+                db_path = fallback_db
+            else:
+                logger.warning("Circuit source filtering requested but cluster DB is missing")
+                return []
 
         # Build query
         query = "SELECT * FROM circuits WHERE 1=1"
@@ -331,6 +364,11 @@ async def search_sqlite(
                     except:
                         pass
 
+            representative_id = row[8] if len(row) > 8 else None
+            is_representative = (
+                True if representative_id is None else representative_id == circuit_id
+            )
+
             results.append(UnifiedCircuitResult(
                 id=f"sqlite:{circuit_id}",
                 source="sqlite",
@@ -339,7 +377,7 @@ async def search_sqlite(
                 gates=normalized_gates,
                 gateString=gates_to_gate_string(normalized_gates),
                 isIdentity=is_identity,
-                isRepresentative=row[7] is None if len(row) > 7 else None  # representative_id
+                isRepresentative=is_representative
             ))
 
     except Exception as e:

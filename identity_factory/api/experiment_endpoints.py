@@ -30,7 +30,11 @@ from identity_factory.api.experiment_models import (
     StartExperimentRequest,
     StartExperimentResponse,
 )
-from identity_factory.experiment_runner import EXPERIMENTS_DIR, experiment_runner
+from identity_factory.experiment_runner import (
+    EXPERIMENTS_DIR,
+    LOCAL_MIXING_DIR,
+    experiment_runner,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +125,25 @@ def _results_from_disk(job_id: str) -> Optional[ExperimentResults]:
         except Exception:
             continue
             
+    return None
+
+
+def _output_dir_for_job(job_id: str) -> Optional[Path]:
+    job = experiment_runner.get_job(job_id)
+    if job and job.output_dir:
+        return job.output_dir
+
+    if not EXPERIMENTS_DIR.exists():
+        return None
+
+    for results_path in EXPERIMENTS_DIR.rglob("results.json"):
+        try:
+            with open(results_path, "r") as f:
+                data = json.load(f)
+            if data.get("job_id") == job_id:
+                return results_path.parent
+        except Exception:
+            continue
     return None
 
 
@@ -359,6 +382,75 @@ async def get_experiment_logs(job_id: str, tail: int = 100):
         "status": job.status.value,
         "line_count": len(job.log_lines),
         "lines": lines,
+    }
+
+
+@router.get("/{job_id}/rac-progress")
+async def get_rac_progress(job_id: str, tail: int = 200):
+    """
+    Get RAC-specific progress information.
+
+    Returns:
+    - progress_lines: tail of the obfuscated.gate_progress.txt file
+    - latest_intermediate: most recent circuit string from rac_intermediate.txt (if available)
+    """
+    output_dir = _output_dir_for_job(job_id)
+    if not output_dir:
+        raise HTTPException(status_code=404, detail=f"Experiment {job_id} not found")
+
+    progress_path = output_dir / "obfuscated.gate_progress.txt"
+    max_progress_line_chars = 2000
+    max_gate_string_chars = 20000
+    progress_lines = []
+    if progress_path.exists():
+        try:
+            with open(progress_path, "r") as f:
+                all_lines = f.read().splitlines()
+            if tail > 0:
+                progress_lines = all_lines[-tail:]
+            else:
+                progress_lines = all_lines
+            trimmed_lines = []
+            for line in progress_lines:
+                if len(line) > max_progress_line_chars:
+                    if ";" in line:
+                        trimmed_lines.append(
+                            f"[circuit snapshot length {len(line)} chars]"
+                        )
+                    else:
+                        trimmed_lines.append(
+                            f"{line[:max_progress_line_chars]}... ({len(line)} chars)"
+                        )
+                else:
+                    trimmed_lines.append(line)
+            progress_lines = trimmed_lines
+        except Exception:
+            progress_lines = []
+
+    intermediate_path = LOCAL_MIXING_DIR / "progress" / "rac_intermediate.txt"
+    latest_intermediate = None
+    latest_intermediate_length = None
+    latest_intermediate_truncated = False
+    if intermediate_path.exists():
+        try:
+            with open(intermediate_path, "r") as f:
+                lines = [ln.strip() for ln in f.read().splitlines() if ln.strip()]
+            if lines:
+                latest_intermediate = lines[-1]
+                latest_intermediate_length = len(latest_intermediate)
+                if latest_intermediate_length > max_gate_string_chars:
+                    latest_intermediate = None
+                    latest_intermediate_truncated = True
+        except Exception:
+            latest_intermediate = None
+
+    return {
+        "job_id": job_id,
+        "progress_path": str(progress_path),
+        "progress_lines": progress_lines,
+        "latest_intermediate": latest_intermediate,
+        "latest_intermediate_length": latest_intermediate_length,
+        "latest_intermediate_truncated": latest_intermediate_truncated,
     }
 
 

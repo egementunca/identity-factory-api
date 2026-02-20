@@ -4,6 +4,7 @@ Provides access to SAT-generated ECA57/MCT identity circuits from cluster comput
 """
 
 import logging
+import os
 import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -15,8 +16,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/cluster-database", tags=["cluster-database"])
 
-# Path to cluster database
-CLUSTER_DB_PATH = Path(__file__).parent.parent.parent / "cluster_circuits.db"
+# Path to cluster database (override via env)
+CLUSTER_DB_PATH = Path(
+    os.environ.get(
+        "CLUSTER_DB_PATH",
+        Path(__file__).parent.parent.parent / "cluster_circuits.db",
+    )
+).expanduser()
 
 
 class ClusterCircuit(BaseModel):

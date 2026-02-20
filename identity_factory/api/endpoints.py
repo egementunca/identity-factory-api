@@ -39,11 +39,12 @@ from .models import (
     UnrollRequest,
     UnrollResponse,
 )
+from .db_paths import resolve_identity_db_path
 
 logger = logging.getLogger(__name__)
 
-# Database path - consistent with generators
-_db_path = Path.home() / ".identity_factory" / "circuits.db"
+# Database path - shared default (cluster if present, else ~/.identity_factory)
+_db_path = resolve_identity_db_path()
 _db_path.parent.mkdir(parents=True, exist_ok=True)
 
 # Global instances

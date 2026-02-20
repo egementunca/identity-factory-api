@@ -3,6 +3,7 @@ Permutation Database API endpoints.
 Provides read-only access to the local_mixing LMDB permutation tables.
 """
 
+import os
 import struct
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -13,9 +14,15 @@ from pydantic import BaseModel
 
 router = APIRouter(prefix="/perm-database", tags=["perm-database"])
 
-# Path to local_mixing/db
-# Assumes the API is running from identity-factory-api/
-DB_PATH = Path(__file__).parent.parent.parent.parent / "local_mixing" / "db"
+# Path to local_mixing/db (LMDB perm tables)
+# Can be overridden via environment to avoid copying large DBs
+# Assumes the API is running from identity-factory-api/ if unset
+DB_PATH = Path(
+    os.environ.get(
+        "LOCAL_MIXING_PERM_DB_PATH",
+        Path(__file__).parent.parent.parent.parent / "local_mixing" / "db",
+    )
+)
 
 
 class PermTableStats(BaseModel):
